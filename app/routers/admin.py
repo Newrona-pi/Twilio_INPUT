@@ -21,6 +21,32 @@ def create_scenario(scenario: schemas.ScenarioCreate, db: Session = Depends(get_
     db.refresh(db_scenario)
     return db_scenario
 
+@router.put("/scenarios/{scenario_id}", response_model=schemas.Scenario)
+def update_scenario(scenario_id: int, scenario: schemas.ScenarioCreate, db: Session = Depends(get_db)):
+    db_scenario = db.query(models.Scenario).filter(models.Scenario.id == scenario_id).first()
+    if not db_scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    for key, value in scenario.dict().items():
+        setattr(db_scenario, key, value)
+    
+    db.commit()
+    db.refresh(db_scenario)
+    return db_scenario
+
+@router.delete("/scenarios/{scenario_id}")
+def delete_scenario(scenario_id: int, db: Session = Depends(get_db)):
+    db_scenario = db.query(models.Scenario).filter(models.Scenario.id == scenario_id).first()
+    if not db_scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    # Cascade delete questions? Or keep them? Usually cascade or error.
+    # For simplicity, we manually delete questions first or rely on DB FK (sqlite default is no action usually)
+    db.query(models.Question).filter(models.Question.scenario_id == scenario_id).delete()
+    db.delete(db_scenario)
+    db.commit()
+    return {"message": "Scenario deleted"}
+
 @router.get("/scenarios/", response_model=List[schemas.Scenario])
 def read_scenarios(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.Scenario).offset(skip).limit(limit).all()
@@ -40,6 +66,31 @@ def create_question(question: schemas.QuestionCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(db_question)
     return db_question
+
+@router.put("/questions/{question_id}", response_model=schemas.Question)
+def update_question(question_id: int, question_update: schemas.QuestionBase, db: Session = Depends(get_db)):
+    db_question = db.query(models.Question).filter(models.Question.id == question_id).first()
+    if not db_question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    # Only update text/order, not scenario_id usually
+    db_question.text = question_update.text
+    db_question.sort_order = question_update.sort_order
+    db_question.is_active = question_update.is_active
+    
+    db.commit()
+    db.refresh(db_question)
+    return db_question
+
+@router.delete("/questions/{question_id}")
+def delete_question(question_id: int, db: Session = Depends(get_db)):
+    db_question = db.query(models.Question).filter(models.Question.id == question_id).first()
+    if not db_question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    db.delete(db_question)
+    db.commit()
+    return {"message": "Question deleted"}
 
 @router.get("/scenarios/{scenario_id}/questions", response_model=List[schemas.Question])
 def read_questions_by_scenario(scenario_id: int, db: Session = Depends(get_db)):
@@ -84,8 +135,8 @@ def read_calls(
         
     calls = query.order_by(models.Call.started_at.desc()).offset(skip).limit(limit).all()
     
-    # Transform to schema if needed manually, but orm_mode handles most
-    # We might need to map scenario_name manually if not eager loaded or in schema
+    # Populating scenario_id for schema if needed, ORM handles it via relationship if named correctly
+    # Schema says scenario_id: int, Model has scenario_id column. OK.
     return calls 
 
 @router.get("/export_csv")
@@ -104,23 +155,22 @@ def export_calls_csv(
     writer = csv.writer(stream)
     
     # Header
-    writer.writerow(["CallSid", "Date", "To", "From", "Scenario", "Question", "AnswerType", "RecordingURL", "Transcript"])
+    writer.writerow(["CallSid", "Date", "To", "From", "ScenarioID", "Question", "AnswerType", "RecordingURL", "Transcript"])
     
     for call in calls:
-        scenario_name = "" # Simplified, could fetch scenario
+        scenario_id = call.scenario_id if call.scenario_id else ""
         
-        # If call has no answers, output one line
         if not call.answers:
             writer.writerow([
                 call.call_sid, call.started_at, call.to_number, call.from_number, 
-                scenario_name, "", "", "", ""
+                scenario_id, "", "", "", ""
             ])
         else:
             for ans in call.answers:
                 q_text = ans.question.text if ans.question else "Unknown"
                 writer.writerow([
                     call.call_sid, call.started_at, call.to_number, call.from_number,
-                    scenario_name, q_text, ans.answer_type, 
+                    scenario_id, q_text, ans.answer_type, 
                     ans.recording_url_twilio or "", 
                     ans.transcript_text or ""
                 ])
@@ -129,7 +179,7 @@ def export_calls_csv(
     response.headers["Content-Disposition"] = "attachment; filename=export.csv"
     return response
 
-# --- Frontend Render (Optional, serving HTML) ---
+# --- Frontend Render ---
 from fastapi.templating import Jinja2Templates
 templates = Jinja2Templates(directory="app/templates")
 

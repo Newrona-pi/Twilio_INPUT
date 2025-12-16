@@ -7,6 +7,7 @@
     <title>Twilio シナリオ管理画面</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -22,148 +23,160 @@
     <main>
         <!-- Tab 1: Scenarios -->
         <section id="tab-scenarios" class="tab-content active">
-            <div class="panel">
-                <h2>シナリオの新規作成・編集</h2>
-                <p class="description">※電話での応答内容（シナリオ）を作成する画面です。</p>
-                <form id="scenario-form">
-                    <div class="form-group">
-                        <label>シナリオ名</label>
-                        <input type="text" id="scenario-name" placeholder="例：キャンペーンA用、求人受付用" required>
-                        <p class="help-text">※管理用の名前です。発信者には聞こえません。</p>
+            <div class="split-view">
+                <!-- Left: List -->
+                <div class="sidebar panel">
+                    <h2>シナリオ一覧</h2>
+                    <button class="create-btn" onclick="showCreateScenarioForm()">
+                        <i class="fas fa-plus"></i> 新規作成
+                    </button>
+                    <ul id="scenario-list">
+                        <!-- JS renders list here -->
+                    </ul>
+                </div>
+
+                <!-- Right: Details -->
+                <div class="content panel" id="scenario-detail-panel">
+                    <div id="welcome-message" style="text-align: center; color: #999; margin-top: 50px;">
+                        <p>左側のリストからシナリオを選択するか、<br>新規作成してください。</p>
                     </div>
 
-                    <div class="form-group">
-                        <label>挨拶メッセージ</label>
-                        <textarea id="scenario-greeting" placeholder="例：お電話ありがとうございます。株式会社〇〇です。"></textarea>
-                        <p class="help-text">※電話が繋がった直後に流れる最初のメッセージを入力してください。</p>
+                    <!-- Scenario Edit Form -->
+                    <div id="scenario-editor" class="hidden">
+                        <div class="header-actions">
+                            <h2 id="editor-title">シナリオ編集</h2>
+                            <div>
+                                <button type="button" class="secondary small" onclick="copyCurrentScenario()">
+                                    <i class="fas fa-copy"></i> コピーして新規作成
+                                </button>
+                                <button type="button" class="danger small" onclick="deleteCurrentScenario()">
+                                    <i class="fas fa-trash"></i> 削除
+                                </button>
+                            </div>
+                        </div>
+
+                        <form id="scenario-form">
+                            <input type="hidden" id="scenario-id">
+                            <div class="form-group">
+                                <label>シナリオ名 <span class="badge">管理用</span></label>
+                                <input type="text" id="scenario-name" placeholder="例：キャンペーンA用" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>挨拶メッセージ <span class="badge">AI発話</span></label>
+                                <textarea id="scenario-greeting" placeholder="電話に出た直後に話す内容"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>免責事項・録音告知 <span class="badge">AI発話</span></label>
+                                <textarea id="scenario-disclaimer" placeholder="挨拶の後に続く補足メッセージ"></textarea>
+                            </div>
+
+                            <div class="actions-right">
+                                <button type="submit" class="primary">保存する</button>
+                            </div>
+                        </form>
+
+                        <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #eee;">
+
+                        <!-- Questions Area -->
+                        <div id="questions-area">
+                            <h3>質問リスト <span class="description-inline">※この順序でAIが質問します</span></h3>
+
+                            <div id="questions-container">
+                                <!-- JS renders questions here -->
+                            </div>
+
+                            <div class="add-question-box">
+                                <h4><i class="fas fa-plus-circle"></i> 質問を追加</h4>
+                                <form id="question-form">
+                                    <input type="hidden" id="question-id"> <!-- For editing -->
+                                    <div class="form-group">
+                                        <textarea id="question-text" placeholder="例：お名前をおっしゃってください。"
+                                            required></textarea>
+                                    </div>
+                                    <!-- Order is handled automatically or via drag/drop in future, simple number for now -->
+                                    <div class="form-row">
+                                        <div class="form-group" style="width: 100px;">
+                                            <label>順序</label>
+                                            <input type="number" id="question-order" value="10" title="小さい順に実行されます">
+                                        </div>
+                                        <div class="actions-right" style="flex:1; align-items: flex-end;">
+                                            <button type="button" class="secondary"
+                                                onclick="resetQuestionForm()">クリア</button>
+                                            <button type="submit">質問を保存</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
-
-                    <div class="form-group">
-                        <label>録音の告知（免責事項）</label>
-                        <textarea id="scenario-disclaimer" placeholder="例：品質向上のため、この通話は録音させていただきます。"></textarea>
-                        <p class="help-text">※挨拶の後に流れる、録音告知などの補足メッセージを入力してください。</p>
-                    </div>
-
-                    <button type="submit">シナリオを保存する</button>
-                </form>
-            </div>
-
-            <div class="panel">
-                <h2>登録済みシナリオ一覧</h2>
-                <p class="description">※作成済みのシナリオリストです。クリックすると右(下)で質問を追加できます。</p>
-                <ul id="scenario-list"></ul>
-            </div>
-
-            <div id="questions-section" class="panel hidden">
-                <h3>質問の管理：<span id="current-scenario-name"></span></h3>
-                <p class="description">※選択中のシナリオで、どのような質問をするか設定します。</p>
-
-                <form id="question-form">
-                    <div class="form-group">
-                        <label>質問内容</label>
-                        <input type="text" id="question-text" placeholder="例：お名前をおっしゃってください。" required>
-                        <p class="help-text">※ロボットが読み上げる質問文を入力してください。</p>
-                    </div>
-
-                    <div class="form-group">
-                        <label>順番</label>
-                        <input type="number" id="question-order" placeholder="例：1" value="0" style="width: 80px;">
-                        <p class="help-text">※質問をする順番を数値で指定します（小さい順に質問されます）。</p>
-                    </div>
-
-                    <button type="submit">質問を追加する</button>
-                </form>
-
-                <h4>登録済みの質問リスト</h4>
-                <ul id="question-list"></ul>
+                </div>
             </div>
         </section>
 
-        <!-- Tab 2: Phone Numbers -->
+        <!-- Tab 2: Phone Numbers (Same as before but simplified structure) -->
         <section id="tab-numbers" class="tab-content">
             <div class="panel">
-                <h2>電話番号とシナリオの紐付け</h2>
-                <p class="description">※Twilioの電話番号に対して、どのシナリオを再生するかを設定します。</p>
-
-                <form id="number-form">
-                    <div class="form-group">
-                        <label>電話番号</label>
-                        <input type="text" id="phone-number" placeholder="例：+819012345678" required>
-                        <p class="help-text">※Twilioで購入した電話番号を「+81」から始まる形式で入力してください。</p>
+                <h2>電話番号設定</h2>
+                <div class="split-view-simple">
+                    <div style="flex: 1; padding-right: 2rem; border-right: 1px solid #eee;">
+                        <h3>新規紐付け</h3>
+                        <form id="number-form">
+                            <div class="form-group">
+                                <label>電話番号</label>
+                                <input type="text" id="phone-number" placeholder="+81..." required>
+                            </div>
+                            <div class="form-group">
+                                <label>シナリオ</label>
+                                <select id="number-scenario-select" required>
+                                    <option>ロード中...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>ラベル</label>
+                                <input type="text" id="phone-label" placeholder="〇〇店 代表電話">
+                            </div>
+                            <button type="submit">保存</button>
+                        </form>
                     </div>
-
-                    <div class="form-group">
-                        <label>適用するシナリオ</label>
-                        <select id="number-scenario-select" required>
-                            <option value="">シナリオを選択してください</option>
-                        </select>
-                        <p class="help-text">※この電話番号にかかってきた時に流すシナリオを選択してください。</p>
+                    <div style="flex: 2; padding-left: 2rem;">
+                        <h3>設定済み番号一覧</h3>
+                        <table id="number-table">
+                            <thead>
+                                <tr>
+                                    <th>番号</th>
+                                    <th>シナリオ</th>
+                                    <th>ラベル</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
-
-                    <div class="form-group">
-                        <label>ラベル（メモ）</label>
-                        <input type="text" id="phone-label" placeholder="例：東京本社 代表電話">
-                        <p class="help-text">※管理用のメモです（省略可能）。どの番号か分かりやすくするための名前です。</p>
-                    </div>
-
-                    <button type="submit">設定を保存する</button>
-                </form>
-            </div>
-
-            <div class="panel">
-                <h2>現在の設定一覧</h2>
-                <p class="description">※現在稼働中の電話番号設定リストです。</p>
-                <table id="number-table">
-                    <thead>
-                        <tr>
-                            <th>電話番号</th>
-                            <th>シナリオID</th>
-                            <th>ラベル</th>
-                            <th>状態</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+                </div>
             </div>
         </section>
 
         <!-- Tab 3: Logs -->
         <section id="tab-logs" class="tab-content">
-            <div class="panel controls">
-                <h2>通話ログ検索・出力</h2>
-                <p class="description">※過去の通話履歴や回答内容を確認・ダウンロードできる画面です。</p>
-
-                <div class="search-box">
-                    <div class="form-group">
-                        <label>着信番号 (To) で絞り込み</label>
-                        <input type="text" id="filter-to" placeholder="例：+819012345678">
-                        <p class="help-text">※特定のTwilio番号への着信だけを見たい場合に入力してください。</p>
-                    </div>
-
-                    <div class="form-group">
-                        <label>発信者番号 (From) で絞り込み</label>
-                        <input type="text" id="filter-from" placeholder="例：+8180...">
-                        <p class="help-text">※特定の人からの電話だけを見たい場合に入力してください。</p>
-                    </div>
-
-                    <div class="actions">
-                        <button onclick="loadLogs()">検索して表示</button>
-                        <button onclick="exportCSV()" class="secondary">CSVダウンロード</button>
-                    </div>
-                    <p class="help-text" style="margin-top:0.5rem;">※CSVダウンロードは、現在の絞り込み条件（着信番号）に基づいて出力されます。</p>
-                </div>
-            </div>
-
             <div class="panel">
-                <h2>履歴一覧</h2>
+                <div class="header-actions">
+                    <h2>通話ログ</h2>
+                    <div class="actions">
+                        <input type="text" id="filter-to" placeholder="To番号で検索" class="search-input">
+                        <button onclick="loadLogs()"><i class="fas fa-search"></i></button>
+                        <button onclick="exportCSV()" class="secondary"><i class="fas fa-file-csv"></i> CSV出力</button>
+                    </div>
+                </div>
                 <table id="logs-table">
                     <thead>
                         <tr>
-                            <th style="width:150px;">日時</th>
-                            <th style="width:120px;">発信者 (From)</th>
-                            <th style="width:120px;">着信先 (To)</th>
-                            <th style="width:80px;">状態</th>
-                            <th>回答内容 (質問と録音)</th>
+                            <th>日時</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>シナリオ</th>
+                            <th>回答データ</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
