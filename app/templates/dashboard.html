@@ -81,10 +81,10 @@
 
                         <!-- Questions Area (Always visible now) -->
                         <div id="questions-area">
-                            <h3>質問リスト <span class="description-inline">※この順序でAIが質問します</span></h3>
+                            <h3>質問リスト <span class="description-inline">※ドラッグで並び替え可能</span></h3>
 
                             <div id="questions-container">
-                                <!-- JS renders questions here -->
+                                <!-- JS renders questions here with drag & drop -->
                             </div>
 
                             <div class="add-question-box">
@@ -95,18 +95,10 @@
                                         <textarea id="question-text" placeholder="例：お名前をおっしゃってください。"
                                             required></textarea>
                                     </div>
-                                    <div class="form-row">
-                                        <div class="form-group" style="width: 150px;">
-                                            <label>順序</label>
-                                            <select id="question-order" required>
-                                                <!-- Populated by JS -->
-                                            </select>
-                                        </div>
-                                        <div class="actions-right" style="flex:1; align-items: flex-end;">
-                                            <button type="button" class="secondary"
-                                                onclick="resetQuestionForm()">クリア</button>
-                                            <button type="submit">質問を保存</button>
-                                        </div>
+                                    <div class="actions-right">
+                                        <button type="button" class="secondary"
+                                            onclick="resetQuestionForm()">クリア</button>
+                                        <button type="submit">質問を保存</button>
                                     </div>
                                 </form>
                             </div>

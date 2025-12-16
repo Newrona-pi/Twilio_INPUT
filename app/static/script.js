@@ -1,10 +1,10 @@
 const API_BASE = "/admin";
 let currentScenario = null;
 let currentQuestions = [];
+let draggedElement = null;
 
 // --- Notification System ---
 function showNotification(title, items) {
-    // items can be a string or an array of strings
     let itemsHtml = '';
     if (Array.isArray(items)) {
         itemsHtml = items.map(item => `<div style="margin: 5px 0;"><i class="fas fa-check" style="color:#27ae60; margin-right:8px;"></i>${item}</div>`).join('');
@@ -26,7 +26,7 @@ function showNotification(title, items) {
     setTimeout(() => {
         overlay.style.opacity = '0';
         setTimeout(() => overlay.remove(), 200);
-    }, 2500); // Longer display for multiple items
+    }, 2000); // 2 seconds
 }
 
 // --- Tab Switching ---
@@ -84,7 +84,6 @@ async function selectScenario(scenarioId) {
     document.getElementById('scenario-disclaimer').value = scenario.disclaimer_text || '';
 
     await loadQuestions(scenario.id);
-    populateOrderSelect();
 }
 
 function showCreateScenarioForm() {
@@ -98,7 +97,6 @@ function showCreateScenarioForm() {
     document.getElementById('scenario-id').value = "";
     document.getElementById('scenario-form').reset();
     document.getElementById('questions-container').innerHTML = '';
-    populateOrderSelect();
 }
 
 // --- Scenario Actions ---
@@ -204,7 +202,7 @@ async function deleteCurrentScenario() {
     showNotification('削除完了', `シナリオ「${deletedName}」を削除しました`);
 }
 
-// --- Questions ---
+// --- Questions with Drag & Drop ---
 async function loadQuestions(scenarioId) {
     const res = await fetch(`${API_BASE}/scenarios/${scenarioId}/questions`);
     currentQuestions = await res.json();
@@ -215,87 +213,142 @@ function renderQuestions() {
     const container = document.getElementById('questions-container');
     container.innerHTML = '';
 
-    currentQuestions.forEach(q => {
+    currentQuestions.forEach((q, index) => {
         const div = document.createElement('div');
         div.className = 'question-item';
+        div.draggable = true;
+        div.dataset.questionId = q.id;
+        div.dataset.index = index;
+
         div.innerHTML = `
-            <div>
-                <span class="q-order">#${q.sort_order}</span>
+            <i class="fas fa-grip-vertical drag-handle"></i>
+            <div style="margin-left: 35px;">
+                <span class="q-order">#${index + 1}</span>
                 <span class="q-text">${escapeHtml(q.text)}</span>
             </div>
             <div class="q-actions">
-                <button class="small secondary" onclick="editQuestion(${q.id}, \`${escapeHtml(q.text)}\`, ${q.sort_order})">編集</button>
+                <button class="small secondary" onclick="editQuestion(${q.id}, \`${escapeHtml(q.text)}\`)">編集</button>
                 <button class="small danger" onclick="deleteQuestion(${q.id})">削除</button>
             </div>
         `;
+
+        // Drag events
+        div.addEventListener('dragstart', handleDragStart);
+        div.addEventListener('dragover', handleDragOver);
+        div.addEventListener('drop', handleDrop);
+        div.addEventListener('dragend', handleDragEnd);
+
         container.appendChild(div);
     });
-
-    populateOrderSelect();
 }
 
-function populateOrderSelect() {
-    const select = document.getElementById('question-order');
-    const usedOrders = currentQuestions.map(q => q.sort_order);
-
-    select.innerHTML = '';
-    for (let i = 1; i <= 50; i++) {
-        if (!usedOrders.includes(i)) {
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.textContent = i;
-            select.appendChild(opt);
-        }
-    }
-
-    const currentEditId = document.getElementById('question-id').value;
-    if (currentEditId) {
-        const editingQ = currentQuestions.find(q => q.id == currentEditId);
-        if (editingQ) {
-            const currentOrder = editingQ.sort_order;
-            if (!Array.from(select.options).find(o => o.value == currentOrder)) {
-                const opt = document.createElement('option');
-                opt.value = currentOrder;
-                opt.textContent = currentOrder;
-                select.appendChild(opt);
-            }
-            select.value = currentOrder;
-        }
-    }
+function handleDragStart(e) {
+    draggedElement = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
 }
 
-function editQuestion(id, text, order) {
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+
+    const afterElement = getDragAfterElement(e.currentTarget.parentElement, e.clientY);
+    if (afterElement == null) {
+        e.currentTarget.classList.add('drag-over');
+    }
+    return false;
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation();
+    }
+
+    if (draggedElement !== this) {
+        const allItems = [...document.querySelectorAll('.question-item')];
+        const draggedIndex = allItems.indexOf(draggedElement);
+        const targetIndex = allItems.indexOf(this);
+
+        if (draggedIndex < targetIndex) {
+            this.parentNode.insertBefore(draggedElement, this.nextSibling);
+        } else {
+            this.parentNode.insertBefore(draggedElement, this);
+        }
+
+        saveNewOrder();
+    }
+
+    this.classList.remove('drag-over');
+    return false;
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.question-item').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+}
+
+async function saveNewOrder() {
+    const items = document.querySelectorAll('.question-item');
+    const updates = [];
+
+    items.forEach((item, index) => {
+        const qId = parseInt(item.dataset.questionId);
+        const question = currentQuestions.find(q => q.id === qId);
+        if (question) {
+            updates.push({
+                id: qId,
+                sort_order: index + 1,
+                text: question.text
+            });
+        }
+    });
+
+    // Save all updates
+    for (const update of updates) {
+        await fetch(`${API_BASE}/questions/${update.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: update.text,
+                sort_order: update.sort_order,
+                is_active: true
+            })
+        });
+    }
+
+    await loadQuestions(currentScenario.id);
+}
+
+function editQuestion(id, text) {
     document.getElementById('question-id').value = id;
     document.getElementById('question-text').value = text;
-    document.getElementById('question-order').value = order;
     document.querySelector('.add-question-box h4').textContent = "質問を編集";
-    populateOrderSelect();
+    document.getElementById('question-text').focus();
 }
 
 function resetQuestionForm() {
     document.getElementById('question-id').value = '';
     document.getElementById('question-form').reset();
     document.querySelector('.add-question-box h4').textContent = "質問を追加";
-    populateOrderSelect();
 }
 
 document.getElementById('question-form').onsubmit = async (e) => {
     e.preventDefault();
 
     const savedItems = [];
-    let scenarioSaved = false;
 
-    // Auto-save scenario if not saved yet or if there are changes
     if (!currentScenario || !document.getElementById('scenario-id').value) {
         const result = await saveScenario();
         if (!result) {
             alert('シナリオの保存に失敗しました');
             return;
         }
-        scenarioSaved = true;
         savedItems.push(`シナリオ「${result.scenario.name}」を${result.isNew ? '作成' : '更新'}`);
 
-        // Check if greeting/disclaimer were filled
         if (result.scenario.greeting_text) {
             savedItems.push('挨拶メッセージを保存');
         }
@@ -308,15 +361,21 @@ document.getElementById('question-form').onsubmit = async (e) => {
 
     const qId = document.getElementById('question-id').value;
     const text = document.getElementById('question-text').value;
-    const order = document.getElementById('question-order').value;
 
     let url = `${API_BASE}/questions/`;
     let method = 'POST';
     let isNewQuestion = !qId;
 
+    // Auto-assign next order number
+    const nextOrder = currentQuestions.length + 1;
+
     if (qId) {
         url += `${qId}`;
         method = 'PUT';
+        const existingQ = currentQuestions.find(q => q.id == qId);
+        var order = existingQ ? existingQ.sort_order : nextOrder;
+    } else {
+        var order = nextOrder;
     }
 
     await fetch(url, {
@@ -324,7 +383,7 @@ document.getElementById('question-form').onsubmit = async (e) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             text: text,
-            sort_order: parseInt(order),
+            sort_order: order,
             scenario_id: currentScenario.id,
             is_active: true
         })

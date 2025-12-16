@@ -242,7 +242,11 @@ h3 {
     margin-bottom: 15px;
 }
 
-/* Questions */
+/* Questions - Drag & Drop */
+#questions-container {
+    min-height: 50px;
+}
+
 #questions-container .question-item {
     background: #f8f9fa;
     border: 1px solid #eee;
@@ -250,12 +254,31 @@ h3 {
     margin-bottom: 10px;
     border-radius: 4px;
     position: relative;
+    cursor: move;
+    transition: all 0.2s;
+}
+
+#questions-container .question-item:hover {
+    background: #e8f4f8;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+#questions-container .question-item.dragging {
+    opacity: 0.5;
+    transform: rotate(2deg);
+}
+
+#questions-container .question-item.drag-over {
+    border-top: 3px solid #3498db;
 }
 
 .question-item .q-order {
     font-weight: bold;
     color: #3498db;
     margin-right: 10px;
+    background: #eef7fd;
+    padding: 2px 8px;
+    border-radius: 3px;
 }
 
 .question-item .q-actions {
@@ -267,6 +290,16 @@ h3 {
 
 .question-item:hover .q-actions {
     display: block;
+}
+
+.question-item .drag-handle {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #bbb;
+    font-size: 1.2rem;
+    cursor: move;
 }
 
 .add-question-box {
@@ -305,6 +338,7 @@ h3 {
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     text-align: center;
     min-width: 300px;
+    max-width: 500px;
     animation: slideDown 0.3s ease;
 }
 

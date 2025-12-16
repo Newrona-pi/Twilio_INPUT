@@ -18,8 +18,21 @@ async def handle_incoming_call(
     CallSid: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    # 1. Look up Scenario by To number
+    # Normalize phone number (remove spaces, hyphens, parentheses)
+    def normalize_phone(number):
+        return number.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    
+    to_normalized = normalize_phone(To)
+    
+    # 1. Look up Scenario by To number (try exact match first, then normalized)
     phone_entry = db.query(models.PhoneNumber).filter(models.PhoneNumber.to_number == To).first()
+    if not phone_entry:
+        # Try normalized lookup
+        all_numbers = db.query(models.PhoneNumber).all()
+        for pn in all_numbers:
+            if normalize_phone(pn.to_number) == to_normalized:
+                phone_entry = pn
+                break
     
     # Create Call record
     call = models.Call(
