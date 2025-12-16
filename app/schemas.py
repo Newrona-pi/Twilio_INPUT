@@ -7,6 +7,7 @@ class ScenarioBase(BaseModel):
     name: str
     greeting_text: str
     disclaimer_text: Optional[str] = None
+    question_guidance_text: Optional[str] = None
     is_active: bool = True
 
 class ScenarioCreate(ScenarioBase):
@@ -66,6 +67,7 @@ class CallLog(BaseModel):
     from_number: str
     to_number: str
     scenario_id: Optional[int]
+    scenario_name: Optional[str] = None
     status: str
     started_at: datetime
     answers: List[AnswerLog] = []

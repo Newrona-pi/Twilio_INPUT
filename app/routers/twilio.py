@@ -65,7 +65,12 @@ async def handle_incoming_call(
     if scenario.disclaimer_text:
         vr.say(scenario.disclaimer_text, language="ja-JP")
 
-    # 3. Ask First Question
+    # 3. Question Guidance (before first question)
+    guidance_text = scenario.question_guidance_text or "このあと何点か質問をさせていただきます。回答が済みましたら＃を押して次に進んでください"
+    vr.say(guidance_text, language="ja-JP")
+    vr.pause(length=1.5)  # 1.5 second pause
+
+    # 4. Ask First Question
     first_question = db.query(models.Question).filter(
         models.Question.scenario_id == scenario.id,
         models.Question.is_active == True
@@ -73,11 +78,15 @@ async def handle_incoming_call(
 
     if first_question:
         vr.say(first_question.text, language="ja-JP")
-        # Record response
-        # Encode question_id in the action URL or index
-        # Using index 0 for start
         action_url = f"/twilio/record_callback?scenario_id={scenario.id}&q_curr={first_question.id}"
-        vr.record(action=action_url, max_length=60, finish_on_key="#")
+        # Remove max_length, set timeout=0 to disable auto-end, enable transcription
+        vr.record(
+            action=action_url, 
+            finish_on_key="#",
+            timeout=0,  # Disable silence detection
+            transcribe=True,  # Enable transcription
+            transcribe_callback=f"/twilio/transcription_callback"
+        )
     else:
         vr.say("質問が設定されていません。終了します。", language="ja-JP")
 
@@ -123,10 +132,32 @@ async def handle_recording(
         # Ask next
         vr.say(next_question.text, language="ja-JP")
         action_url = f"/twilio/record_callback?scenario_id={scenario_id}&q_curr={next_question.id}"
-        vr.record(action=action_url, max_length=60, finish_on_key="#")
+        vr.record(
+            action=action_url, 
+            finish_on_key="#",
+            timeout=0,
+            transcribe=True,
+            transcribe_callback=f"/twilio/transcription_callback"
+        )
     else:
         # No more questions
         vr.say("ご回答ありがとうございました。失礼いたします。", language="ja-JP")
         vr.hangup()
 
     return Response(content=str(vr), media_type="application/xml")
+
+@router.post("/transcription_callback")
+async def handle_transcription(
+    request: Request,
+    TranscriptionText: str = Form(None),
+    RecordingSid: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Update answer with transcription
+    answer = db.query(models.Answer).filter(models.Answer.recording_sid == RecordingSid).first()
+    if answer:
+        answer.transcript_text = TranscriptionText
+        answer.transcript_status = "completed"
+        db.commit()
+    
+    return Response(content="OK", media_type="text/plain")

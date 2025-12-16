@@ -82,6 +82,7 @@ async function selectScenario(scenarioId) {
     document.getElementById('scenario-name').value = scenario.name;
     document.getElementById('scenario-greeting').value = scenario.greeting_text || '';
     document.getElementById('scenario-disclaimer').value = scenario.disclaimer_text || '';
+    document.getElementById('scenario-guidance').value = scenario.question_guidance_text || '';
 
     await loadQuestions(scenario.id);
 }
@@ -105,13 +106,19 @@ async function saveScenario() {
     const name = document.getElementById('scenario-name').value;
     const greeting = document.getElementById('scenario-greeting').value;
     const disclaimer = document.getElementById('scenario-disclaimer').value;
+    const guidance = document.getElementById('scenario-guidance').value;
 
     if (!name) {
         alert('シナリオ名を入力してください');
         return null;
     }
 
-    const payload = { name, greeting_text: greeting, disclaimer_text: disclaimer };
+    const payload = {
+        name,
+        greeting_text: greeting,
+        disclaimer_text: disclaimer,
+        question_guidance_text: guidance
+    };
 
     let url = `${API_BASE}/scenarios/`;
     let method = 'POST';
@@ -168,7 +175,8 @@ async function copyScenario(scenarioId) {
         body: JSON.stringify({
             name: name,
             greeting_text: scenario.greeting_text,
-            disclaimer_text: scenario.disclaimer_text
+            disclaimer_text: scenario.disclaimer_text,
+            question_guidance_text: scenario.question_guidance_text
         })
     });
     const newScenario = await createRes.json();
@@ -479,9 +487,10 @@ async function loadLogs() {
         if (call.answers) {
             call.answers.forEach(a => {
                 let rec = a.recording_url_twilio ? `<a href="${a.recording_url_twilio}" target="_blank"><i class="fas fa-play"></i></a>` : '';
-                answersHtml += `<div style="font-size:0.9rem; margin-bottom:4px;">
-                    <span style="color:#aaa;">Q:</span> ${escapeHtml(a.question_text || '??')} <br>
-                    <span style="color:#3498db;">A:</span> ${rec} ${escapeHtml(a.transcript_text || '(音声のみ)')}
+                let transcript = a.transcript_text ? escapeHtml(a.transcript_text) : '(テキスト化待ち)';
+                answersHtml += `<div style="font-size:0.9rem; margin-bottom:8px; padding:8px; background:#f9f9f9; border-radius:4px;">
+                    <div style="color:#888; font-size:0.85rem; margin-bottom:4px;"><strong>Q:</strong> ${escapeHtml(a.question_text || '??')}</div>
+                    <div style="color:#2c3e50;"><strong>A:</strong> ${rec} ${transcript}</div>
                 </div>`;
             });
         }
@@ -491,8 +500,8 @@ async function loadLogs() {
                 <td>${new Date(call.started_at).toLocaleString('ja-JP')}</td>
                 <td>${escapeHtml(call.from_number)}</td>
                 <td>${escapeHtml(call.to_number)}</td>
-                <td style="font-size:0.85rem; color:#888;">${call.scenario_id || '-'}</td>
-                <td>${answersHtml}</td>
+                <td style="font-weight:600; color:#3498db;">${escapeHtml(call.scenario_name || '-')}</td>
+                <td>${answersHtml || '<span style="color:#999;">回答なし</span>'}</td>
             </tr>`;
     });
 }

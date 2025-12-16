@@ -10,6 +10,7 @@ class Scenario(Base):
     name = Column(String, index=True)
     greeting_text = Column(String) # 通話開始時の挨拶
     disclaimer_text = Column(String, nullable=True) # 録音告知など
+    question_guidance_text = Column(String, nullable=True, default="このあと何点か質問をさせていただきます。回答が済みましたら＃を押して次に進んでください") # 質問開始前のガイダンス
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -53,6 +54,10 @@ class Call(Base):
 
     answers = relationship("Answer", back_populates="call")
     scenario = relationship("Scenario")
+    
+    @property
+    def scenario_name(self):
+        return self.scenario.name if self.scenario else None
 
 class Answer(Base):
     __tablename__ = "answers"
