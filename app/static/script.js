@@ -268,23 +268,36 @@ async function loadQuestions(scenarioId) {
 
 // Add Enter key support outside loadQuestions, or in init
 document.addEventListener('DOMContentLoaded', function () {
+    console.log("DOM loaded, initializing script...");
     const input = document.getElementById('new-question-text');
     if (input) {
         input.addEventListener('keypress', function (e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                console.log("Enter key pressed in new question input");
                 addQuestionToList();
             }
         });
+    } else {
+        console.error("New question input not found in DOM!");
     }
 });
 
-function addQuestionToList() {
-    console.log("Adding question to list...");
+// Explicitly attach to window to ensure it's globally accessible
+window.addQuestionToList = function () {
+    console.log("addQuestionToList called");
     const textInput = document.getElementById('new-question-text');
+    if (!textInput) {
+        console.error("Input element 'new-question-text' not found!");
+        return;
+    }
+
     const text = textInput.value.trim();
     if (!text) {
         console.log("Empty text, skipping");
+        // Flash the input to indicate error/empty
+        textInput.style.borderColor = "red";
+        setTimeout(() => textInput.style.borderColor = "", 500);
         return;
     }
 
@@ -295,11 +308,14 @@ function addQuestionToList() {
         is_new: true,
         temp_id: Date.now() // temporary ID for DOM
     });
+
+    console.log("Question added to array, rendering...", currentQuestions);
     renderQuestions();
+
     textInput.value = '';
     textInput.focus();
-    console.log("Question added:", text);
-}
+    console.log("Input cleared and focused");
+};
 
 function renderQuestions() {
     const container = document.getElementById('questions-container');

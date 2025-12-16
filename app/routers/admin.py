@@ -283,4 +283,8 @@ templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/dashboard")
 def dashboard_ui(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    import time
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request, 
+        "now_timestamp": int(time.time())
+    })
